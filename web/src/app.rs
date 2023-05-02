@@ -21,10 +21,17 @@ pub fn App(cx: Scope) -> impl IntoView {
         <Router>
             <main>
                 <Routes>
-                    <Route path="" view=|cx| view! { cx, <HomePage/> }/>
+                    <Route path="" view=|cx| view! { cx, <HelloWorld/> } ssr=SsrMode::Async />
                 </Routes>
             </main>
         </Router>
+    }
+}
+
+#[component]
+fn HelloWorld(cx: Scope) -> impl IntoView {
+    view! { cx,
+        <h1>"Hello World!"</h1>
     }
 }
 
