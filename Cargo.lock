@@ -1157,11 +1157,14 @@ dependencies = [
 name = "sheet"
 version = "0.1.0"
 dependencies = [
+ "csv",
  "dotenv",
  "google-sheets4",
  "hyper",
  "hyper-rustls 0.24.0",
  "reqwest",
+ "serde",
+ "serde_json",
  "tokio",
  "yup-oauth2",
 ]
