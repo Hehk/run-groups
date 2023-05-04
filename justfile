@@ -1,4 +1,3 @@
 build:
-  cargo run
-  @(cd ./web && npx tailwindcss -i ./src/styles.css -o ./build/styles.css --watch)
+  (cd ./web && cargo run && npx tailwindcss -i ./src/styles.css -o ./build/styles.css)
   

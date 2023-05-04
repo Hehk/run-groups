@@ -1,112 +1,156 @@
-use horrorshow::{box_html, helper::doctype, html, owned_html, Render, RenderBox, RenderOnce};
-use serde::Deserialize;
 use std::{fs::File, io::Write};
 
-#[derive(Debug, Deserialize, Clone)]
-struct Meetup {
-    #[serde(rename = "Running Group")]
-    group: String,
-    #[serde(rename = "Day of the Week")]
-    day: String,
-    #[serde(rename = "Time")]
-    time: String,
-    #[serde(rename = "Description")]
-    description: String,
-    #[serde(rename = "Location")]
-    location: String,
+use sheet::model::{Meetup, Day, Time};
+use dotenv::dotenv;
+use std::collections::HashMap;
+
+fn create_head(title: &str) -> String {
+    format!("<head>
+    <meta charset=\"utf-8\">
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+    <link rel=\"stylesheet\" href=\"./styles.css\" as=\"style\">
+    <title>{}</title>
+</head>", title)
 }
 
-struct Meetups {
-    monday: Vec<Meetup>,
-    tuesday: Vec<Meetup>,
-    wednesday: Vec<Meetup>,
-    thursday: Vec<Meetup>,
-    friday: Vec<Meetup>,
-    saturday: Vec<Meetup>,
-    sunday: Vec<Meetup>,
-}
+fn render_time (time: &Time) -> String {
+    match time {
+        Time::Morning => "Morning".to_string(),
+        Time::Afternoon => "Afternoon".to_string(),
+        Time::Evening => "Evening".to_string(),
+        Time::ClockTime(hour, minute) => {
+            let hour = *hour;
+            let minute = *minute;
 
-fn read_meetups() -> Meetups {
-    let meetups_raw = File::open("./data/meetups.csv").unwrap();
-    let mut meetups_csv = csv::Reader::from_reader(meetups_raw);
-    let mut meetups: Meetups = Meetups {
-        monday: Vec::new(),
-        tuesday: Vec::new(),
-        wednesday: Vec::new(),
-        thursday: Vec::new(),
-        friday: Vec::new(),
-        saturday: Vec::new(),
-        sunday: Vec::new(),
-    };
+            let is_pm = if hour > 12 { true } else { false };
+            let hour = if is_pm { hour - 12 } else { hour };
+            let minute = if minute < 10 { format!("0{}", minute) } else { minute.to_string() };
+            let suffix = if is_pm { "PM" } else { "AM" };
 
-    for result in meetups_csv.deserialize() {
-        let meetup: Meetup = result.unwrap();
-
-        match meetup.day.clone() {
-            day if day.contains("Monday") => meetups.monday.push(meetup),
-            day if day.contains("Tuesday") => meetups.tuesday.push(meetup),
-            day if day.contains("Wednesday") => meetups.wednesday.push(meetup),
-            day if day.contains("Thursday") => meetups.thursday.push(meetup),
-            day if day.contains("Friday") => meetups.friday.push(meetup),
-            day if day.contains("Saturday") => meetups.saturday.push(meetup),
-            day if day.contains("Sunday") => meetups.sunday.push(meetup),
-            _ => (),
-        }
-    }
-
-    return meetups;
-}
-
-fn render_head() -> impl Render {
-    return owned_html! {
-        head {
-            title: "Austin Running";
-            meta(name="viewport", content="width=device-width, initial-scale=1") {}
-            link(rel="stylesheet", href="./styles.css") {}
-        }
-    };
-}
-
-fn render_day(day: String, meetups: Vec<Meetup>) -> Box<dyn RenderBox> {
-    box_html! {
-        h2(class="font-bold text-3xl mb-8 align-bottom"): day;
-        ol(class="mb-16") {
-            @ for meetup in meetups {
-                li(class="grid grid-cols-3 sm:grid-cols-6 gap-4 mb-4") {
-                    div(class="w-24 flex-none col-span-1") : meetup.time;
-                    div(class="col-span-2 sm:col-span-5") {
-                        div(class="mb-2 block") : meetup.group;
-                        div(class="leading-6 mb-2") :meetup.description;
-                        div(class="leading-6 mb-2") : meetup.location;
-                    }
-                }
-            }
+            format!("{}:{} {}", hour, minute, suffix)
         }
     }
 }
 
-fn main() {
-    let meetups = read_meetups();
+fn render_meetups(meetups: &Vec<&Meetup>) -> String {
+    let mut content = String::new();
+    for meetup in meetups {
+        let time = render_time(&meetup.time);
+        let group = &meetup.group;
+        let group_id = &meetup.group_id;
+        let description = match &meetup.description {
+            Some(d) => format!(r#"<div>{}</div>"#, d),
+            None => "".to_string(),
+        };
+        let location = match &meetup.location {
+            Some(l) => format!(r#"<div>{}</div>"#, l),
+            None => "".to_string(),
+        };
 
-    let tree = html! {
-        :doctype::HTML;
-        html {
-            :&render_head();
-            body {
-                main(class="container max-w-3xl mx-auto px-4 pt-8") {
-                    :render_day("Monday".to_string(), meetups.monday.clone());
-                    :render_day("Tuesday".to_string(), meetups.tuesday.clone());
-                    :render_day("Wednesday".to_string(), meetups.wednesday.clone());
-                    :render_day("Thursday".to_string(), meetups.thursday.clone());
-                    :render_day("Friday".to_string(), meetups.friday.clone());
-                    :render_day("Saturday".to_string(), meetups.saturday.clone());
-                    :render_day("Sunday".to_string(), meetups.sunday.clone());
-                }
-            }
-        }
-    };
+        let str = format!(r#"<li class="grid grid-cols-3 sm:grid-cols-6 gap-4 mb-4">
+<div class="w-24 flex-none col-span-1">{time}</div>
+<div class="col-span-2 sm:col-span-5 space-y-2">
+    <a href="/groups/{group_id}" class="underline decoration-green-400 hover:text-green-400 underline-offset-4">{group}</a>
+    {description}
+    {location}
+</div>
+</li>"#);
+        content.push_str(&str)
+    }
+    content
+}
 
-    let html = format!("{}", tree);
+fn render_day(day: &str, meetups: &Vec<&Meetup>) -> String {
+    format!("
+<section>
+    <h2 class=\"font-bold text-3xl mb-8 align-bottom\">{}</h2>
+    <ol class=\"mb-16\">
+        {}
+    </ol>
+</section>", day, render_meetups(meetups))
+}
+
+fn group_meetups(meetups : &Vec<Meetup>) -> HashMap<&Day, Vec<&Meetup>> {
+    let mut meetups_by_day : HashMap<&Day, Vec<&Meetup>> = HashMap::new();
+    for meetup in meetups {
+        let day = &meetup.day;
+        match meetups_by_day.get_mut(day) {
+            Some(group) => group.push(meetup),
+            None => {
+                meetups_by_day.insert(day, vec![meetup]);
+            },
+        };
+    }
+
+    return meetups_by_day;
+}
+
+fn get_content (meetups: &Vec<Meetup>) -> String {
+    let meetups_by_day = group_meetups(meetups);
+
+    let mut content = String::new();
+
+    let monday = meetups_by_day.get(&Day::Monday).unwrap();
+    content.push_str(render_day("Monday", monday).as_str());
+
+    let tuesday = meetups_by_day.get(&Day::Tuesday).unwrap();
+    content.push_str(render_day("Tuesday", tuesday).as_str());
+
+    let wednesday = meetups_by_day.get(&Day::Wednesday).unwrap();
+    content.push_str(render_day("Wednesday", wednesday).as_str());
+
+    let thursday = meetups_by_day.get(&Day::Thursday).unwrap();
+    content.push_str(render_day("Thursday", thursday).as_str());
+
+    let friday = meetups_by_day.get(&Day::Friday).unwrap();
+    content.push_str(render_day("Friday", friday).as_str());
+
+    let saturday = meetups_by_day.get(&Day::Saturday).unwrap();
+    content.push_str(render_day("Saturday", saturday).as_str());
+
+    let sunday = meetups_by_day.get(&Day::Sunday).unwrap();
+    content.push_str(render_day("Sunday", sunday).as_str());
+
+    content
+}
+
+fn create_header () -> String {
+    let link_class = "underline decoration-green-400 hover:text-green-400 underline-offset-4 mr-4 leading-8";
+    format!(r#"<header class="container max-w-3xl mx-auto px-4 pt-16 sm:flex justify-between">
+        <h1 class="font-bold text-4xl mb-8 align-bottom">
+            <a href="/">Austin Running</a>
+        </h1>
+        <nav>
+            <span class="mr-4 underline underline-offset-4">Home</span>
+            <a class="{link_class}" href="/groups">Groups</a>
+            <a class="{link_class}" href="/events">Events &amp; Races</a>
+            <a class="{link_class}" href="/routes">Routes</a>
+            <a class="{link_class}" href="/about">About</a>
+        </nav>
+    </header>"#)
+}
+
+#[tokio::main]
+async fn main() {
+    dotenv().ok();
+
+    let spreadsheet_id = dotenv::var("SPREADSHEET_ID").expect("SPREADSHEET_ID must be set");
+    let service_account_path = dotenv::var("SERVICE_ACCOUNT_PATH").expect("SERVICE_ACCOUNT_PATH must be set");
+
+    let hub = sheet::create_sheets(service_account_path).await;
+
+    let meetups = sheet::get_meetups(hub, &spreadsheet_id).await.unwrap();
+
+    let html = format!("<!DOCTYPE html><html>
+    {}
+    <body>
+        {}
+        <main class=\"container max-w-3xl mx-auto px-4 pt-8\">
+            {}
+        </main>
+    </body>
+</html>", create_head("Running Groups"), create_header(), get_content(&meetups));
+
 
     let mut file = File::create("./build/index.html").unwrap();
     file.write_all(html.as_bytes()).unwrap();

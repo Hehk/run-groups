@@ -1,34 +1,11 @@
 extern crate google_sheets4 as sheets4;
 
-use serde::Deserialize;
 use serde_json::Value;
 use sheets4::Sheets;
 use sheets4::{oauth2, oauth2::ServiceAccountAuthenticator};
+use std::env;
 
-#[derive(Debug, Deserialize, Clone)]
-struct Meetup {
-    #[serde(rename = "Running Group")]
-    group: String,
-    #[serde(rename = "Day of the Week")]
-    day: String,
-    #[serde(rename = "Time")]
-    time: String,
-    #[serde(rename = "Description")]
-    description: String,
-    #[serde(rename = "Location")]
-    location: String,
-}
-
-#[derive(Debug)]
-struct Meetups {
-    monday: Vec<Meetup>,
-    tuesday: Vec<Meetup>,
-    wednesday: Vec<Meetup>,
-    thursday: Vec<Meetup>,
-    friday: Vec<Meetup>,
-    saturday: Vec<Meetup>,
-    sunday: Vec<Meetup>,
-}
+pub mod model;
 
 pub async fn create_sheets(
     service_account_path: String,
@@ -85,16 +62,14 @@ pub async fn get_sheet(
     }
 }
 
-async fn get_meetups(
+pub async fn get_meetups(
     hub: Sheets<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
     spreadsheet_id: &String,
-) -> Option<Meetups> {
-    let values = get_sheet(hub, spreadsheet_id, &"Meetups".to_string()).await;
-    if let Err(e) = values {
-        println!("Error: {}", e);
-        return None;
-    }
-    let values = values.unwrap();
+) -> Result<Vec<model::Meetup>, String> {
+    let values = match get_sheet(hub, spreadsheet_id, &"Meetups".to_string()).await {
+        Ok(it) => it,
+        Err(_) => return Err("Failed to get sheet".to_string()),
+    };
 
     let csv = values
         .iter()
@@ -112,83 +87,5 @@ async fn get_meetups(
         .collect::<Vec<String>>()
         .join("\n");
 
-    println!("CSV: {}", csv);
-    let mut csv_reader = csv::Reader::from_reader(csv.as_bytes());
-    let mut meetups: Meetups = Meetups {
-        monday: Vec::new(),
-        tuesday: Vec::new(),
-        wednesday: Vec::new(),
-        thursday: Vec::new(),
-        friday: Vec::new(),
-        saturday: Vec::new(),
-        sunday: Vec::new(),
-    };
-    for result in csv_reader.deserialize() {
-        let meetup: Meetup = result.unwrap();
-
-        match meetup.day.clone() {
-            day if day.contains("Monday") => meetups.monday.push(meetup),
-            day if day.contains("Tuesday") => meetups.tuesday.push(meetup),
-            day if day.contains("Wednesday") => meetups.wednesday.push(meetup),
-            day if day.contains("Thursday") => meetups.thursday.push(meetup),
-            day if day.contains("Friday") => meetups.friday.push(meetup),
-            day if day.contains("Saturday") => meetups.saturday.push(meetup),
-            day if day.contains("Sunday") => meetups.sunday.push(meetup),
-            _ => (),
-        }
-    }
-    return Some(meetups);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_get() {
-        dotenv::dotenv().ok();
-        let service_account_path = dotenv::var("SERVICE_ACCOUNT_PATH").unwrap();
-        let spreadsheet_id = dotenv::var("SPREADSHEET_ID").unwrap();
-        let sheet = "Events".to_string();
-
-        let hub = create_sheets(service_account_path).await;
-        let values = get_sheet(hub, &spreadsheet_id, &sheet).await;
-
-        match values {
-            Ok(values) => {
-                println!("Values: {:?}", values);
-                assert!(values.len() > 0);
-            }
-            Err(e) => {
-                println!("Error: {}", e);
-                assert!(false);
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn test_meetups() {
-        dotenv::dotenv().ok();
-        let service_account_path = dotenv::var("SERVICE_ACCOUNT_PATH").unwrap();
-        let spreadsheet_id = dotenv::var("SPREADSHEET_ID").unwrap();
-
-        let hub = create_sheets(service_account_path).await;
-        let meetups = get_meetups(hub, &spreadsheet_id).await;
-
-        print!("Meetups: {:?}", meetups);
-    }
-
-    // #[tokio::test]
-    // async fn test_create_client() {
-    //     let access_token = get_token(String::from(
-    //         "/Users/kyle/Projects/run-groups/sheet/src/client_secret.json",
-    //     ))
-    //     .await;
-
-    //     if let Some(ref token) = access_token.token() {
-    //         assert!(token.len() > 0);
-    //     } else {
-    //         assert!(false);
-    //     }
-    // }
+    model::read_meetups(csv)
 }
