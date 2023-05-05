@@ -1,6 +1,6 @@
 use std::{fs::File, io::Write};
 
-use sheet::model::{Meetup, Day, Time};
+use sheet::model::{Meetup, Day, Time, Group};
 use dotenv::dotenv;
 use std::collections::HashMap;
 
@@ -85,7 +85,35 @@ fn group_meetups(meetups : &Vec<Meetup>) -> HashMap<&Day, Vec<&Meetup>> {
     return meetups_by_day;
 }
 
-fn get_content (meetups: &Vec<Meetup>) -> String {
+fn create_group_content (meetups: &Vec<Group>) -> String {
+    meetups.iter().map(|group| {
+        let name = &group.name;
+        let description = match &group.description {
+            Some(d) => format!(r#"<div>{}</div>"#, d),
+            None => "".to_string(),
+        };
+        let website = match &group.website {
+            Some(w) => format!(r#"<div><a href="{w}">{w}</a></div>"#, w=w),
+            None => "".to_string(),
+        };
+        let facebook = match &group.facebook {
+            Some(f) => format!(r#"<div><a href="{f}">{f}</a></div>"#, f=f),
+            None => "".to_string(),
+        };
+        let twitter = match &group.twitter {
+            Some(t) => format!(r#"<div><a href="{t}">{t}</a></div>"#, t=t),
+            None => "".to_string(),
+        };
+        let instagram = match &group.instagram {
+            Some(i) => format!(r#"<div><a href="{i}">{i}</a></div>"#, i=i),
+            None => "".to_string(),
+        };
+
+        "".to_string()
+    }).collect::<Vec<String>>().join("")
+}
+
+fn create_meetup_content (meetups: &Vec<Meetup>) -> String {
     let meetups_by_day = group_meetups(meetups);
 
     let mut content = String::new();
@@ -114,7 +142,7 @@ fn get_content (meetups: &Vec<Meetup>) -> String {
     content
 }
 
-fn create_header () -> String {
+fn create_nav () -> String {
     let link_class = "underline decoration-green-400 hover:text-green-400 underline-offset-4 mr-4 leading-8";
     format!(r#"<header class="container max-w-3xl mx-auto px-4 pt-16 sm:flex justify-between">
         <h1 class="font-bold text-4xl mb-8 align-bottom">
@@ -130,7 +158,19 @@ fn create_header () -> String {
     </header>"#)
 }
 
-#[tokio::main]
+fn create_html (head : String, navigation : String, content : String) -> String {
+    format!(r#"<!DOCTYPE html><html>
+    {}
+    <body>
+        {}
+        <main class="container max-w-3xl mx-auto px-4 pt-8">
+            {}
+        </main>
+    </body>
+</html>"#, head, navigation, content)
+}
+
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
     dotenv().ok();
 
@@ -140,18 +180,19 @@ async fn main() {
     let hub = sheet::create_sheets(service_account_path).await;
 
     let meetups = sheet::get_meetups(hub, &spreadsheet_id).await.unwrap();
+    let index_page = create_html(
+        create_head("Austin Running"),
+        create_nav(),
+        create_meetup_content(&meetups),
+    );
 
-    let html = format!("<!DOCTYPE html><html>
-    {}
-    <body>
-        {}
-        <main class=\"container max-w-3xl mx-auto px-4 pt-8\">
-            {}
-        </main>
-    </body>
-</html>", create_head("Running Groups"), create_header(), get_content(&meetups));
-
+    let groups = sheet::get_groups(hub, &spreadsheet_id).await.unwrap();
+    let groups_page = create_html(
+        create_head("Austin Running - Groups"),
+        create_nav(),
+        create_group_content(&groups),
+    );
 
     let mut file = File::create("./build/index.html").unwrap();
-    file.write_all(html.as_bytes()).unwrap();
+    file.write_all(index_page.as_bytes()).unwrap();
 }

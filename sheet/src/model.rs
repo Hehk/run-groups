@@ -1,5 +1,23 @@
-use std::str::FromStr;
 use serde::Deserialize;
+use std::str::FromStr;
+
+#[derive(Debug, Deserialize, Clone)]
+struct SpreadsheetGroup {
+    #[serde(rename = "Name")]
+    name: String,
+    #[serde(rename = "Instagram")]
+    instagram: String,
+    #[serde(rename = "Facebook")]
+    facebook: String,
+    #[serde(rename = "Twitter")]
+    twitter: String,
+    #[serde(rename = "Website")]
+    website: String,
+    #[serde(rename = "Strava")]
+    strava: String,
+    #[serde(rename = "Description")]
+    description: String,
+}
 
 #[derive(Debug, Deserialize, Clone)]
 struct SpreadsheetMeetup {
@@ -32,6 +50,17 @@ pub enum Time {
     Afternoon,
     Evening,
     ClockTime(i8, i8),
+}
+
+pub struct Group {
+    pub id: String,
+    pub name: String,
+    pub instagram: Option<String>,
+    pub facebook: Option<String>,
+    pub twitter: Option<String>,
+    pub website: Option<String>,
+    pub strava: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -136,4 +165,36 @@ pub fn read_meetups(csv: String) -> Result<Vec<Meetup>, String> {
         }
     }
     Ok(meetups)
+}
+
+pub fn none_if_empty(s: String) -> Option<String> {
+    if s.trim() == "" {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+pub fn read_groups(csv: String) -> Result<Vec<Group>, String> {
+    let mut csv_reader = csv::Reader::from_reader(csv.as_bytes());
+    let mut groups = Vec::new();
+    for raw_group in csv_reader.deserialize() {
+        let group: SpreadsheetGroup = match raw_group {
+            Ok(it) => it,
+            Err(err) => return Err(format!("Error reading group: {}", err)),
+        };
+        let group_id = create_group_id(group.name.clone());
+        groups.push(Group {
+            name: group.name,
+            id: group_id,
+            instagram: none_if_empty(group.instagram),
+            facebook: none_if_empty(group.facebook),
+            twitter: none_if_empty(group.twitter),
+            website: none_if_empty(group.website),
+            strava: none_if_empty(group.strava),
+            description: none_if_empty(group.description),
+        });
+    }
+
+    Ok(groups)
 }

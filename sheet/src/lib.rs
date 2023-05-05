@@ -3,7 +3,6 @@ extern crate google_sheets4 as sheets4;
 use serde_json::Value;
 use sheets4::Sheets;
 use sheets4::{oauth2, oauth2::ServiceAccountAuthenticator};
-use std::env;
 
 pub mod model;
 
@@ -62,16 +61,8 @@ pub async fn get_sheet(
     }
 }
 
-pub async fn get_meetups(
-    hub: Sheets<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
-    spreadsheet_id: &String,
-) -> Result<Vec<model::Meetup>, String> {
-    let values = match get_sheet(hub, spreadsheet_id, &"Meetups".to_string()).await {
-        Ok(it) => it,
-        Err(_) => return Err("Failed to get sheet".to_string()),
-    };
-
-    let csv = values
+fn sheet_to_csv(values: Vec<Vec<Value>>) -> String {
+    values
         .iter()
         .map(|row| {
             let row = row
@@ -85,7 +76,28 @@ pub async fn get_meetups(
             row
         })
         .collect::<Vec<String>>()
-        .join("\n");
+        .join("\n")
+}
 
+pub async fn get_groups(
+    hub: Sheets<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
+    spreadsheet_id: &String,
+) -> Result<Vec<model::Group>, String> {
+    let csv = get_sheet(hub, spreadsheet_id, &"Groups".to_string())
+        .await
+        .map(sheet_to_csv)?;
+    model::read_groups(csv)
+}
+
+pub async fn get_meetups(
+    hub: Sheets<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
+    spreadsheet_id: &String,
+) -> Result<Vec<model::Meetup>, String> {
+    let values = match get_sheet(hub, spreadsheet_id, &"Meetups".to_string()).await {
+        Ok(it) => it,
+        Err(_) => return Err("Failed to get sheet".to_string()),
+    };
+
+    let csv = sheet_to_csv(values);
     model::read_meetups(csv)
 }
