@@ -4,7 +4,7 @@ use serde_json::Value;
 use sheets4::Sheets;
 use sheets4::{oauth2, oauth2::ServiceAccountAuthenticator};
 
-pub mod model;
+use crate::model;
 
 pub async fn create_sheets(
     service_account_path: String,
@@ -32,7 +32,7 @@ pub async fn create_sheets(
 }
 
 pub async fn get_sheet(
-    hub: Sheets<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
+    hub: &Sheets<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
     spreadsheet_id: &String,
     sheet_name: &String,
 ) -> Result<Vec<Vec<Value>>, String> {
@@ -80,7 +80,7 @@ fn sheet_to_csv(values: Vec<Vec<Value>>) -> String {
 }
 
 pub async fn get_groups(
-    hub: Sheets<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
+    hub: &Sheets<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
     spreadsheet_id: &String,
 ) -> Result<Vec<model::Group>, String> {
     let csv = get_sheet(hub, spreadsheet_id, &"Groups".to_string())
@@ -90,7 +90,7 @@ pub async fn get_groups(
 }
 
 pub async fn get_meetups(
-    hub: Sheets<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
+    hub: &Sheets<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
     spreadsheet_id: &String,
 ) -> Result<Vec<model::Meetup>, String> {
     let values = match get_sheet(hub, spreadsheet_id, &"Meetups".to_string()).await {

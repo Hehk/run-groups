@@ -1,8 +1,10 @@
 use std::{fs::File, io::Write};
 
-use sheet::model::{Meetup, Day, Time, Group};
 use dotenv::dotenv;
 use std::collections::HashMap;
+
+use run_groups::model::{Meetup, Day, Time, Group};
+use run_groups::sheet;
 
 fn create_head(title: &str) -> String {
     format!("<head>
@@ -179,14 +181,14 @@ async fn main() {
 
     let hub = sheet::create_sheets(service_account_path).await;
 
-    let meetups = sheet::get_meetups(hub, &spreadsheet_id).await.unwrap();
+    let meetups = sheet::get_meetups(&hub, &spreadsheet_id).await.unwrap();
     let index_page = create_html(
         create_head("Austin Running"),
         create_nav(),
         create_meetup_content(&meetups),
     );
 
-    let groups = sheet::get_groups(hub, &spreadsheet_id).await.unwrap();
+    let groups = sheet::get_groups(&hub, &spreadsheet_id).await.unwrap();
     let groups_page = create_html(
         create_head("Austin Running - Groups"),
         create_nav(),

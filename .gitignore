@@ -1,5 +1,5 @@
 /target
-/web/dist
+/build
 service_account.json
 .env
 .DS_Store

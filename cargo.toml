@@ -1,6 +1,23 @@
-[workspace]
+[package]
+name = "run_groups"
+version = "0.1.0"
+edition = "2021"
 
-members = [
-  "web",
-  "sheet"
-]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+path = "src/lib.rs"
+name = "run_groups"
+
+[[bin]]
+path = "src/main.rs"
+name = "run_groups"
+
+[dependencies]
+dotenv = "0.15.0"
+serde = { version = "1.0.160", features = ["derive"] }
+tokio = "1.28.0"
+csv = "1.2.1"
+google-sheets4 = "5.0.2"
+hyper = "0.14.26"
+hyper-rustls = { version = "0.24.0", features = ["http2"] }
+serde_json = "1.0.96"
