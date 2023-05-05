@@ -129,9 +129,6 @@ fn parse_time(raw_time: String) -> Result<Time, String> {
 
 pub fn read_meetups(csv: String) -> Result<Vec<Meetup>, String> {
     let mut csv_reader = csv::Reader::from_reader(csv.as_bytes());
-
-    println!("Reading meetups {}", csv);
-
     let raw_meetups = csv_reader
         .deserialize()
         .into_iter()

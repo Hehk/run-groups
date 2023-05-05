@@ -1,3 +1,4 @@
+use std::fs;
 use std::{fs::File, io::Write};
 
 use dotenv::dotenv;
@@ -6,12 +7,14 @@ use std::collections::HashMap;
 use run_groups::model::{Day, Group, Meetup, Time};
 use run_groups::sheet;
 
-fn create_head(title: &str) -> String {
+fn create_head(title: &str, css: &str) -> String {
     format!(
         "<head>
     <meta charset=\"utf-8\">
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
-    <link rel=\"stylesheet\" href=\"./styles.css\" as=\"style\">
+    <style>
+    {css}
+    </style>
     <title>{}</title>
 </head>",
         title
@@ -156,7 +159,8 @@ fn create_group_content(meetups: &Vec<Group>) -> String {
         .collect::<Vec<String>>()
         .join("");
 
-    format!(r#"<section>
+    format!(
+        r#"<section>
     <h2 class="font-bold text-3xl mb-8 align-bottom">Groups</h2>
     <ol class="mb-16">
         {main_content}
@@ -250,16 +254,20 @@ async fn main() {
 
     let hub = sheet::create_sheets(service_account_path).await;
 
+    let css = fs::read_to_string("./build/styles.css")
+        .expect("CSS was not built before the main html");
+    let css = css.as_str();
+
     let meetups = sheet::get_meetups(&hub, &spreadsheet_id).await.unwrap();
     let index_page = create_html(
-        create_head("Austin Running"),
+        create_head("Austin Running", css),
         create_nav("Home"),
         create_meetup_content(&meetups),
     );
 
     let groups = sheet::get_groups(&hub, &spreadsheet_id).await.unwrap();
     let groups_page = create_html(
-        create_head("Austin Running - Groups"),
+        create_head("Austin Running - Groups", css),
         create_nav("Groups"),
         create_group_content(&groups),
     );
@@ -268,5 +276,4 @@ async fn main() {
     file.write_all(index_page.as_bytes()).unwrap();
     let mut file = File::create("./build/groups.html").unwrap();
     file.write_all(groups_page.as_bytes()).unwrap();
-
 }
