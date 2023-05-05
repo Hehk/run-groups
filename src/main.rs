@@ -3,19 +3,22 @@ use std::{fs::File, io::Write};
 use dotenv::dotenv;
 use std::collections::HashMap;
 
-use run_groups::model::{Meetup, Day, Time, Group};
+use run_groups::model::{Day, Group, Meetup, Time};
 use run_groups::sheet;
 
 fn create_head(title: &str) -> String {
-    format!("<head>
+    format!(
+        "<head>
     <meta charset=\"utf-8\">
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
     <link rel=\"stylesheet\" href=\"./styles.css\" as=\"style\">
     <title>{}</title>
-</head>", title)
+</head>",
+        title
+    )
 }
 
-fn render_time (time: &Time) -> String {
+fn render_time(time: &Time) -> String {
     match time {
         Time::Morning => "Morning".to_string(),
         Time::Afternoon => "Afternoon".to_string(),
@@ -26,7 +29,11 @@ fn render_time (time: &Time) -> String {
 
             let is_pm = if hour > 12 { true } else { false };
             let hour = if is_pm { hour - 12 } else { hour };
-            let minute = if minute < 10 { format!("0{}", minute) } else { minute.to_string() };
+            let minute = if minute < 10 {
+                format!("0{}", minute)
+            } else {
+                minute.to_string()
+            };
             let suffix = if is_pm { "PM" } else { "AM" };
 
             format!("{}:{} {}", hour, minute, suffix)
@@ -36,6 +43,22 @@ fn render_time (time: &Time) -> String {
 
 fn render_meetups(meetups: &Vec<&Meetup>) -> String {
     let mut content = String::new();
+    let mut meetups = meetups.clone();
+    meetups.sort_by(|a, b| {
+        let a_time = &a.time;
+        let b_time = &b.time;
+        fn time_for_enum(time: &Time) -> i16 {
+            match time {
+                Time::Morning => 6 * 60,
+                Time::Afternoon => 12 * 60,
+                Time::Evening => 18 * 60,
+                Time::ClockTime(hour, minute) => (*hour as i16) * 60 + (*minute as i16),
+            }
+        }
+
+        (&time_for_enum(a_time)).cmp(&time_for_enum(b_time))
+    });
+
     for meetup in meetups {
         let time = render_time(&meetup.time);
         let group = &meetup.group;
@@ -49,73 +72,101 @@ fn render_meetups(meetups: &Vec<&Meetup>) -> String {
             None => "".to_string(),
         };
 
-        let str = format!(r#"<li class="grid grid-cols-3 sm:grid-cols-6 gap-4 mb-4">
+        let str = format!(
+            r#"<li class="grid grid-cols-3 sm:grid-cols-6 gap-4 mb-4">
 <div class="w-24 flex-none col-span-1">{time}</div>
 <div class="col-span-2 sm:col-span-5 space-y-2">
     <a href="/groups/{group_id}" class="underline decoration-green-400 hover:text-green-400 underline-offset-4">{group}</a>
     {description}
     {location}
 </div>
-</li>"#);
+</li>"#
+        );
         content.push_str(&str)
     }
     content
 }
 
 fn render_day(day: &str, meetups: &Vec<&Meetup>) -> String {
-    format!("
+    format!(
+        "
 <section>
     <h2 class=\"font-bold text-3xl mb-8 align-bottom\">{}</h2>
     <ol class=\"mb-16\">
         {}
     </ol>
-</section>", day, render_meetups(meetups))
+</section>",
+        day,
+        render_meetups(meetups)
+    )
 }
 
-fn group_meetups(meetups : &Vec<Meetup>) -> HashMap<&Day, Vec<&Meetup>> {
-    let mut meetups_by_day : HashMap<&Day, Vec<&Meetup>> = HashMap::new();
+fn group_meetups(meetups: &Vec<Meetup>) -> HashMap<&Day, Vec<&Meetup>> {
+    let mut meetups_by_day: HashMap<&Day, Vec<&Meetup>> = HashMap::new();
     for meetup in meetups {
         let day = &meetup.day;
         match meetups_by_day.get_mut(day) {
             Some(group) => group.push(meetup),
             None => {
                 meetups_by_day.insert(day, vec![meetup]);
-            },
+            }
         };
     }
 
     return meetups_by_day;
 }
 
-fn create_group_content (meetups: &Vec<Group>) -> String {
-    meetups.iter().map(|group| {
-        let name = &group.name;
-        let description = match &group.description {
-            Some(d) => format!(r#"<div>{}</div>"#, d),
-            None => "".to_string(),
-        };
-        let website = match &group.website {
-            Some(w) => format!(r#"<div><a href="{w}">{w}</a></div>"#, w=w),
-            None => "".to_string(),
-        };
-        let facebook = match &group.facebook {
-            Some(f) => format!(r#"<div><a href="{f}">{f}</a></div>"#, f=f),
-            None => "".to_string(),
-        };
-        let twitter = match &group.twitter {
-            Some(t) => format!(r#"<div><a href="{t}">{t}</a></div>"#, t=t),
-            None => "".to_string(),
-        };
-        let instagram = match &group.instagram {
-            Some(i) => format!(r#"<div><a href="{i}">{i}</a></div>"#, i=i),
-            None => "".to_string(),
-        };
+fn create_group_content(meetups: &Vec<Group>) -> String {
+    let main_content = meetups
+        .iter()
+        .map(|group| {
+            let id = &group.id;
+            let name = &group.name;
+            fn link (name: &str, url: &Option<String>) -> String {
+                match url {
+                    Some(u) => format!(r#"<a class="underline decoration-green-400 hover:text-green-400 underline-offset-4 mr-4 leading-8" href="{u}">{name}</a>"#, u = u),
+                    None => "".to_string(),
+                }
+            }
 
-        "".to_string()
-    }).collect::<Vec<String>>().join("")
+            let description = match &group.description {
+                Some(d) => format!(r#"<p class="leading-6 mb-2">{}</p>"#, d),
+                None => "".to_string(),
+            };
+            let website = link("Website", &group.website);
+            let facebook = link("Facebook", &group.facebook);
+            let twitter = link("Twitter", &group.twitter);
+            let instagram = link("Instagram", &group.instagram);
+            let strava = link("Strava", &group.strava);
+
+
+            format!(
+        r#"<li class="mb-8">
+    <h3 class="text-2xl mb-4 align-bottom" id="{id}">{name}</h3>
+    {description}
+    <div class="mb-2">
+        {website}
+        {facebook}
+        {twitter}
+        {instagram}
+        {strava}
+    </div>
+</li>"#)
+        })
+        .collect::<Vec<String>>()
+        .join("");
+
+    format!(r#"<section>
+    <h2 class="font-bold text-3xl mb-8 align-bottom">Groups</h2>
+    <ol class="mb-16">
+        {main_content}
+    </ol>
+</section>"#,
+        main_content = main_content
+    )
 }
 
-fn create_meetup_content (meetups: &Vec<Meetup>) -> String {
+fn create_meetup_content(meetups: &Vec<Meetup>) -> String {
     let meetups_by_day = group_meetups(meetups);
 
     let mut content = String::new();
@@ -144,24 +195,39 @@ fn create_meetup_content (meetups: &Vec<Meetup>) -> String {
     content
 }
 
-fn create_nav () -> String {
-    let link_class = "underline decoration-green-400 hover:text-green-400 underline-offset-4 mr-4 leading-8";
-    format!(r#"<header class="container max-w-3xl mx-auto px-4 pt-16 sm:flex justify-between">
+fn create_nav(focus: &str) -> String {
+    let links = vec!["Home", "Groups", "Events and Races", "Routes", "About"]
+        .iter()
+        .map(|page| {
+            let page = page.to_string();
+            let href = format!("/{}", match page.as_str() {
+                "Home" => "".to_string(),
+                "Events and Races" => "events".to_string(),
+                page => page.to_lowercase(),
+            });
+
+            if page == focus {
+                format!(r#"<span class="mr-4 underline underline-offset-4">{page}</span>"#)
+            } else {
+                format!(r#"<a class="underline decoration-green-400 hover:text-green-400 underline-offset-4 mr-4 leading-8" href="{href}">{page}</a>"#)
+            }
+        }).collect::<Vec<String>>().join("\n");
+
+    format!(
+        r#"<header class="container max-w-3xl mx-auto px-4 pt-16 sm:flex justify-between">
         <h1 class="font-bold text-4xl mb-8 align-bottom">
             <a href="/">Austin Running</a>
         </h1>
         <nav>
-            <span class="mr-4 underline underline-offset-4">Home</span>
-            <a class="{link_class}" href="/groups">Groups</a>
-            <a class="{link_class}" href="/events">Events &amp; Races</a>
-            <a class="{link_class}" href="/routes">Routes</a>
-            <a class="{link_class}" href="/about">About</a>
+            {links}
         </nav>
-    </header>"#)
+    </header>"#
+    )
 }
 
-fn create_html (head : String, navigation : String, content : String) -> String {
-    format!(r#"<!DOCTYPE html><html>
+fn create_html(head: String, navigation: String, content: String) -> String {
+    format!(
+        r#"<!DOCTYPE html><html>
     {}
     <body>
         {}
@@ -169,7 +235,9 @@ fn create_html (head : String, navigation : String, content : String) -> String 
             {}
         </main>
     </body>
-</html>"#, head, navigation, content)
+</html>"#,
+        head, navigation, content
+    )
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -177,24 +245,28 @@ async fn main() {
     dotenv().ok();
 
     let spreadsheet_id = dotenv::var("SPREADSHEET_ID").expect("SPREADSHEET_ID must be set");
-    let service_account_path = dotenv::var("SERVICE_ACCOUNT_PATH").expect("SERVICE_ACCOUNT_PATH must be set");
+    let service_account_path =
+        dotenv::var("SERVICE_ACCOUNT_PATH").expect("SERVICE_ACCOUNT_PATH must be set");
 
     let hub = sheet::create_sheets(service_account_path).await;
 
     let meetups = sheet::get_meetups(&hub, &spreadsheet_id).await.unwrap();
     let index_page = create_html(
         create_head("Austin Running"),
-        create_nav(),
+        create_nav("Home"),
         create_meetup_content(&meetups),
     );
 
     let groups = sheet::get_groups(&hub, &spreadsheet_id).await.unwrap();
     let groups_page = create_html(
         create_head("Austin Running - Groups"),
-        create_nav(),
+        create_nav("Groups"),
         create_group_content(&groups),
     );
 
     let mut file = File::create("./build/index.html").unwrap();
     file.write_all(index_page.as_bytes()).unwrap();
+    let mut file = File::create("./build/groups.html").unwrap();
+    file.write_all(groups_page.as_bytes()).unwrap();
+
 }

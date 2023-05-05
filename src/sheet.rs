@@ -62,9 +62,17 @@ pub async fn get_sheet(
 }
 
 fn sheet_to_csv(values: Vec<Vec<Value>>) -> String {
+    let header_length = values[0].len();
+
     values
         .iter()
         .map(|row| {
+            let padding = header_length - row.len();
+            let mut comma_padding = "".to_string();
+            for _ in 0..padding {
+                comma_padding = format!("{},", comma_padding);
+            }
+
             let row = row
                 .iter()
                 .map(|cell| match cell {
@@ -73,7 +81,8 @@ fn sheet_to_csv(values: Vec<Vec<Value>>) -> String {
                 })
                 .collect::<Vec<String>>()
                 .join(",");
-            row
+
+            format!("{}{}", row, comma_padding)
         })
         .collect::<Vec<String>>()
         .join("\n")
@@ -83,9 +92,10 @@ pub async fn get_groups(
     hub: &Sheets<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
     spreadsheet_id: &String,
 ) -> Result<Vec<model::Group>, String> {
-    let csv = get_sheet(hub, spreadsheet_id, &"Groups".to_string())
+    let csv = get_sheet(hub, spreadsheet_id, &"Running Groups".to_string())
         .await
         .map(sheet_to_csv)?;
+
     model::read_groups(csv)
 }
 

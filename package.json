@@ -1,5 +1,16 @@
 {
-	"devDependencies": {
-		"tailwindcss": "^3.3.2"
-	}
+  "name": "run-groups",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "html-server -p 3000 -d ./build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "http-server": "^14.1.1",
+    "tailwind": "^4.0.0"
+  }
 }
